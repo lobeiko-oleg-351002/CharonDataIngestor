@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: charon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - charon-network
+
+  weakapp:
+    image: nantonov/weakapp:latest
+    container_name: charon-weakapp
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - charon-network
+
+  data-ingestor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: charon-data-ingestor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      weakapp:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - WeakApi__BaseUrl=http://weakapp:5000
+      - WeakApi__Endpoint=/api/metrics
+      - RabbitMq__HostName=rabbitmq
+      - RabbitMq__Port=5672
+      - RabbitMq__UserName=guest
+      - RabbitMq__Password=guest
+      - Ingestion__IntervalSeconds=10
+      - Ingestion__Enabled=true
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - charon-network
+    restart: unless-stopped
+
+networks:
+  charon-network:
+    driver: bridge
+
