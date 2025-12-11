@@ -7,11 +7,11 @@ namespace CharonDataIngestor.Services.Decorators;
 public class RabbitMqPublisherDecorator : IRabbitMqPublisher
 {
     private readonly IRabbitMqPublisher _inner;
-    private readonly IExceptionHandlingMiddleware _exceptionHandling;
+    private readonly IExceptionHandlingService _exceptionHandling;
 
     public RabbitMqPublisherDecorator(
         IRabbitMqPublisher inner,
-        IExceptionHandlingMiddleware exceptionHandling)
+        IExceptionHandlingService exceptionHandling)
     {
         _inner = inner;
         _exceptionHandling = exceptionHandling;

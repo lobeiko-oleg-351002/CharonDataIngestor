@@ -7,6 +7,7 @@ using CharonDataIngestor.Services.Decorators;
 using CharonDataIngestor.Services.Interfaces;
 using CharonDataIngestor.Validators;
 using FluentValidation;
+using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -51,26 +52,47 @@ try
         var options = serviceProvider.GetRequiredService<IOptions<WeakApiOptions>>().Value;
         client.BaseAddress = new Uri(options.BaseUrl);
         client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        client.DefaultRequestHeaders.Add("X-Api-Key", options.ApiKey);
     });
     
     builder.Services.AddScoped<IWeakApiClient>(serviceProvider =>
     {
         var inner = serviceProvider.GetRequiredService<WeakApiClient>();
-        var exceptionHandling = serviceProvider.GetRequiredService<IExceptionHandlingMiddleware>();
+        var exceptionHandling = serviceProvider.GetRequiredService<IExceptionHandlingService>();
         return new WeakApiClientDecorator(inner, exceptionHandling);
     });
 
     builder.Services.AddValidatorsFromAssemblyContaining<MetricValidator>();
     builder.Services.AddScoped<IMetricValidatorService, MetricValidatorService>();
 
-    builder.Services.AddScoped<ILoggingMiddleware, LoggingMiddleware>();
-    builder.Services.AddScoped<IExceptionHandlingMiddleware, ExceptionHandlingMiddleware>();
+    builder.Services.AddScoped<ILoggingService, LoggingService>();
+    builder.Services.AddScoped<IExceptionHandlingService, ExceptionHandlingService>();
 
-    builder.Services.AddSingleton<RabbitMqPublisher>();
-    builder.Services.AddSingleton<IRabbitMqPublisher>(serviceProvider =>
+    builder.Services.AddMassTransit(x =>
+    {
+        x.UsingRabbitMq((context, cfg) =>
+        {
+            var options = builder.Configuration.GetSection(RabbitMqOptions.SectionName).Get<RabbitMqOptions>();
+            if (options != null)
+            {
+                cfg.Host(new Uri($"rabbitmq://{options.HostName}:{options.Port}"), h =>
+                {
+                    h.Username(options.UserName);
+                    h.Password(options.Password);
+                });
+
+                cfg.Message<CharonDataIngestor.Models.MetricMessage>(m => m.SetEntityName(options.ExchangeName));
+                
+                cfg.Publish<CharonDataIngestor.Models.MetricMessage>(p => p.ExchangeType = "fanout");
+            }
+        });
+    });
+
+    builder.Services.AddScoped<RabbitMqPublisher>();
+    builder.Services.AddScoped<IRabbitMqPublisher>(serviceProvider =>
     {
         var inner = serviceProvider.GetRequiredService<RabbitMqPublisher>();
-        var exceptionHandling = serviceProvider.GetRequiredService<IExceptionHandlingMiddleware>();
+        var exceptionHandling = serviceProvider.GetRequiredService<IExceptionHandlingService>();
         return new RabbitMqPublisherDecorator(inner, exceptionHandling);
     });
 

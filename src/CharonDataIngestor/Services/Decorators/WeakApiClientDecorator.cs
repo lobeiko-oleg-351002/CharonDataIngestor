@@ -7,11 +7,11 @@ namespace CharonDataIngestor.Services.Decorators;
 public class WeakApiClientDecorator : IWeakApiClient
 {
     private readonly IWeakApiClient _inner;
-    private readonly IExceptionHandlingMiddleware _exceptionHandling;
+    private readonly IExceptionHandlingService _exceptionHandling;
 
     public WeakApiClientDecorator(
         IWeakApiClient inner,
-        IExceptionHandlingMiddleware exceptionHandling)
+        IExceptionHandlingService exceptionHandling)
     {
         _inner = inner;
         _exceptionHandling = exceptionHandling;

@@ -2,9 +2,9 @@ using CharonDataIngestor.Configuration;
 using CharonDataIngestor.Models;
 using CharonDataIngestor.Services;
 using CharonDataIngestor.Services.Interfaces;
+using MassTransit;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Moq;
 using Testcontainers.RabbitMq;
 using Xunit;
 
@@ -14,6 +14,8 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
 {
     private readonly RabbitMqContainer _rabbitMqContainer;
     private IRabbitMqPublisher? _publisher;
+    private ServiceProvider? _serviceProvider;
+    private IBusControl? _busControl;
 
     public RabbitMqIntegrationTests()
     {
@@ -27,26 +29,43 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
     {
         await _rabbitMqContainer.StartAsync();
 
-        var options = new RabbitMqOptions
-        {
-            HostName = _rabbitMqContainer.Hostname,
-            Port = _rabbitMqContainer.GetMappedPublicPort(5672),
-            UserName = "guest",
-            Password = "guest",
-            ExchangeName = "metrics",
-            QueueName = "metrics.queue",
-            RoutingKey = "metrics"
-        };
+        var port = _rabbitMqContainer.GetMappedPublicPort(5672);
+        var hostname = _rabbitMqContainer.Hostname;
 
-        var optionsMock = Options.Create(options);
-        var loggerMock = new Mock<ILogger<RabbitMqPublisher>>();
+        var services = new ServiceCollection();
         
-        _publisher = new RabbitMqPublisher(optionsMock, loggerMock.Object);
+        services.AddLogging();
+        services.AddMassTransit(x =>
+        {
+            x.UsingRabbitMq((context, cfg) =>
+            {
+                cfg.Host(new Uri($"rabbitmq://{hostname}:{port}"), h =>
+                {
+                    h.Username("guest");
+                    h.Password("guest");
+                });
+            });
+        });
+
+        _serviceProvider = services.BuildServiceProvider();
+        _busControl = _serviceProvider.GetRequiredService<IBusControl>();
+        await _busControl.StartAsync();
+
+        var publishEndpoint = _serviceProvider.GetRequiredService<IPublishEndpoint>();
+        var logger = _serviceProvider.GetRequiredService<ILogger<RabbitMqPublisher>>();
+        
+        _publisher = new RabbitMqPublisher(publishEndpoint, logger);
     }
 
     public async Task DisposeAsync()
     {
+        if (_busControl != null)
+        {
+            await _busControl.StopAsync();
+        }
+        
         _publisher?.Dispose();
+        _serviceProvider?.Dispose();
         await _rabbitMqContainer.DisposeAsync();
     }
 
