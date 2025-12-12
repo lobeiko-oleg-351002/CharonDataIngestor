@@ -1,6 +1,6 @@
 namespace CharonDataIngestor.Middleware.Interfaces;
 
-public interface ILoggingMiddleware
+public interface ILoggingService
 {
     void LogMethodStart(string methodName, object? parameters = null);
     void LogMethodSuccess(string methodName, object? result = null, TimeSpan? duration = null);

@@ -3,11 +3,11 @@ using Microsoft.Extensions.Logging;
 
 namespace CharonDataIngestor.Middleware;
 
-public class LoggingMiddleware : ILoggingMiddleware
+public class LoggingService : ILoggingService
 {
-    private readonly ILogger<LoggingMiddleware> _logger;
+    private readonly ILogger<LoggingService> _logger;
 
-    public LoggingMiddleware(ILogger<LoggingMiddleware> logger)
+    public LoggingService(ILogger<LoggingService> logger)
     {
         _logger = logger;
     }

@@ -3,35 +3,35 @@ using Microsoft.Extensions.Logging;
 
 namespace CharonDataIngestor.Middleware;
 
-public class ExceptionHandlingMiddleware : IExceptionHandlingMiddleware
+public class ExceptionHandlingService : IExceptionHandlingService
 {
-    private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-    private readonly ILoggingMiddleware _loggingMiddleware;
+    private readonly ILogger<ExceptionHandlingService> _logger;
+    private readonly ILoggingService _loggingService;
 
-    public ExceptionHandlingMiddleware(
-        ILogger<ExceptionHandlingMiddleware> logger,
-        ILoggingMiddleware loggingMiddleware)
+    public ExceptionHandlingService(
+        ILogger<ExceptionHandlingService> logger,
+        ILoggingService loggingService)
     {
         _logger = logger;
-        _loggingMiddleware = loggingMiddleware;
+        _loggingService = loggingService;
     }
 
     public async Task<T> ExecuteAsync<T>(Func<Task<T>> action, string operationName, CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        _loggingMiddleware.LogMethodStart(operationName);
+        _loggingService.LogMethodStart(operationName);
 
         try
         {
             var result = await action();
             var duration = DateTime.UtcNow - startTime;
-            _loggingMiddleware.LogMethodSuccess(operationName, result, duration);
+            _loggingService.LogMethodSuccess(operationName, result, duration);
             return result;
         }
         catch (Exception ex)
         {
             var duration = DateTime.UtcNow - startTime;
-            _loggingMiddleware.LogMethodFailure(operationName, ex, duration);
+            _loggingService.LogMethodFailure(operationName, ex, duration);
             
             if (ShouldRethrow(ex))
             {
@@ -50,18 +50,18 @@ public class ExceptionHandlingMiddleware : IExceptionHandlingMiddleware
     public async Task ExecuteAsync(Func<Task> action, string operationName, CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        _loggingMiddleware.LogMethodStart(operationName);
+        _loggingService.LogMethodStart(operationName);
 
         try
         {
             await action();
             var duration = DateTime.UtcNow - startTime;
-            _loggingMiddleware.LogMethodSuccess(operationName, duration: duration);
+            _loggingService.LogMethodSuccess(operationName, duration: duration);
         }
         catch (Exception ex)
         {
             var duration = DateTime.UtcNow - startTime;
-            _loggingMiddleware.LogMethodFailure(operationName, ex, duration);
+            _loggingService.LogMethodFailure(operationName, ex, duration);
             
             if (ShouldRethrow(ex))
             {

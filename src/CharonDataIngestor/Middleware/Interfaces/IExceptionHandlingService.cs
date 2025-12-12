@@ -1,6 +1,6 @@
 namespace CharonDataIngestor.Middleware.Interfaces;
 
-public interface IExceptionHandlingMiddleware
+public interface IExceptionHandlingService
 {
     Task<T> ExecuteAsync<T>(Func<Task<T>> action, string operationName, CancellationToken cancellationToken = default);
     Task ExecuteAsync(Func<Task> action, string operationName, CancellationToken cancellationToken = default);
