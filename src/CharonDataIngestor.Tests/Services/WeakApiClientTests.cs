@@ -58,7 +58,10 @@ public class WeakApiClientTests
                 ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(httpResponse);
 
-        var httpClient = new HttpClient(handlerMock.Object);
+        var httpClient = new HttpClient(handlerMock.Object)
+        {
+            BaseAddress = new Uri(_options.BaseUrl)
+        };
         var client = new WeakApiClient(httpClient, _optionsMock.Object, _loggerMock.Object);
 
         var result = await client.FetchMetricsAsync();
@@ -98,7 +101,10 @@ public class WeakApiClientTests
                 };
             });
 
-        var httpClient = new HttpClient(handlerMock.Object);
+        var httpClient = new HttpClient(handlerMock.Object)
+        {
+            BaseAddress = new Uri(_options.BaseUrl)
+        };
         var client = new WeakApiClient(httpClient, _optionsMock.Object, _loggerMock.Object);
 
         var result = await client.FetchMetricsAsync();
@@ -125,7 +131,10 @@ public class WeakApiClientTests
                 ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(httpResponse);
 
-        var httpClient = new HttpClient(handlerMock.Object);
+        var httpClient = new HttpClient(handlerMock.Object)
+        {
+            BaseAddress = new Uri(_options.BaseUrl)
+        };
         var client = new WeakApiClient(httpClient, _optionsMock.Object, _loggerMock.Object);
 
         var result = await client.FetchMetricsAsync();
