@@ -1,5 +1,6 @@
 using CharonDataIngestor.Models;
 using CharonDataIngestor.Services.Interfaces;
+using CharonDbContext.Messages;
 using MassTransit;
 
 namespace CharonDataIngestor.Services;
@@ -26,7 +27,11 @@ public class RabbitMqPublisher : IRabbitMqPublisher
             Payload = metric.Payload
         };
 
-        await _publishEndpoint.Publish(message, cancellationToken);
+        // Publish to the metrics exchange explicitly
+        await _publishEndpoint.Publish(message, ctx =>
+        {
+            ctx.SetRoutingKey("metrics");
+        }, cancellationToken);
     }
 
     public async Task PublishBatchAsync(IEnumerable<Metric> metrics, CancellationToken cancellationToken = default)
@@ -45,7 +50,11 @@ public class RabbitMqPublisher : IRabbitMqPublisher
                 Name = metric.Name,
                 Payload = metric.Payload
             };
-            return _publishEndpoint.Publish(message, cancellationToken);
+            // Publish to the metrics exchange explicitly
+            return _publishEndpoint.Publish(message, ctx =>
+            {
+                ctx.SetRoutingKey("metrics");
+            }, cancellationToken);
         });
 
         await Task.WhenAll(publishTasks);

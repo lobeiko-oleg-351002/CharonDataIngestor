@@ -2,10 +2,12 @@ using CharonDataIngestor;
 using CharonDataIngestor.Configuration;
 using CharonDataIngestor.Middleware;
 using CharonDataIngestor.Middleware.Interfaces;
+using CharonDataIngestor.Models;
 using CharonDataIngestor.Services;
 using CharonDataIngestor.Services.Decorators;
 using CharonDataIngestor.Services.Interfaces;
 using CharonDataIngestor.Validators;
+using CharonDbContext.Messages;
 using FluentValidation;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
@@ -81,9 +83,14 @@ try
                     h.Password(options.Password);
                 });
 
-                cfg.Message<CharonDataIngestor.Models.MetricMessage>(m => m.SetEntityName(options.ExchangeName));
-                
-                cfg.Publish<CharonDataIngestor.Models.MetricMessage>(p => p.ExchangeType = "fanout");
+                // Use CharonDbContext.Messages.MetricMessage - shared contract!
+                Log.Information("===> Using CharonDbContext.Messages.MetricMessage for publishing");
+
+                // Publish to fanout exchange
+                cfg.Publish<MetricMessage>(p => 
+                {
+                    p.ExchangeType = "fanout";
+                });
             }
         });
     });
