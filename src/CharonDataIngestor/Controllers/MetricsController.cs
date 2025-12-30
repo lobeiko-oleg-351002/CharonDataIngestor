@@ -35,7 +35,7 @@ public class MetricsController : ControllerBase
         var validationResult = _validator.Validate(metric);
         if (!validationResult.IsValid)
         {
-            return BadRequest(new { Errors = validationResult.Errors });
+            return BadRequest(new { validationResult.Errors });
         }
 
         await _publisher.PublishAsync(metric, cancellationToken);
@@ -50,7 +50,7 @@ public class MetricsController : ControllerBase
         
         if (!validationResult.IsValid)
         {
-            return BadRequest(new { Errors = validationResult.Errors });
+            return BadRequest(new { validationResult.Errors });
         }
 
         await _publisher.PublishBatchAsync(metricsList, cancellationToken);

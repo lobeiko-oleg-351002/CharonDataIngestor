@@ -12,11 +12,13 @@ using System.Text.Json;
 
 namespace CharonDataIngestor.Tests.Services;
 
-public class WeakApiClientTests
+public class WeakApiClientTests : IDisposable
 {
     private readonly Mock<IOptions<WeakApiOptions>> _optionsMock;
     private readonly Mock<ILogger<WeakApiClient>> _loggerMock;
     private readonly WeakApiOptions _options;
+    private readonly HttpClient _httpClient;
+    private readonly Mock<HttpMessageHandler> _handlerMock;
 
     public WeakApiClientTests()
     {
@@ -31,116 +33,162 @@ public class WeakApiClientTests
 
         _optionsMock = new Mock<IOptions<WeakApiOptions>>();
         _optionsMock.Setup(x => x.Value).Returns(_options);
+
         _loggerMock = new Mock<ILogger<WeakApiClient>>();
+
+        _handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Loose);
+
+        _httpClient = new HttpClient(_handlerMock.Object)
+        {
+            BaseAddress = new Uri(_options.BaseUrl)
+        };
+    }
+
+    public void Dispose()
+    {
+        _httpClient.Dispose();
     }
 
     [Fact]
     public async Task FetchMetricsAsync_ShouldReturnMetrics_WhenApiReturnsSuccess()
     {
-        var metrics = new List<Metric>
+        // Arrange
+        var expectedMetrics = new List<Metric>
         {
             new() { Type = "motion", Name = "Garage", Payload = new Dictionary<string, object> { { "motionDetected", false } } },
             new() { Type = "energy", Name = "Office", Payload = new Dictionary<string, object> { { "energy", 752.91 } } }
         };
 
-        var json = JsonSerializer.Serialize(metrics);
-        var httpResponse = new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
+        var jsonResponse = JsonSerializer.Serialize(expectedMetrics);
 
-        var handlerMock = new Mock<HttpMessageHandler>();
-        handlerMock
+        _handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get),
                 ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(httpResponse);
-
-        var httpClient = new HttpClient(handlerMock.Object)
-        {
-            BaseAddress = new Uri(_options.BaseUrl)
-        };
-        var client = new WeakApiClient(httpClient, _optionsMock.Object, _loggerMock.Object);
-
-        var result = await client.FetchMetricsAsync();
-
-        result.Should().NotBeNull();
-        result.Should().HaveCount(2);
-        result.First().Type.Should().Be("motion");
-        result.First().Name.Should().Be("Garage");
-    }
-
-    [Fact]
-    public async Task FetchMetricsAsync_ShouldRetry_WhenApiReturnsFailure()
-    {
-        var handlerMock = new Mock<HttpMessageHandler>();
-        var callCount = 0;
-        
-        handlerMock
-            .Protected()
-            .Setup<Task<HttpResponseMessage>>(
-                "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(() =>
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                callCount++;
-                if (callCount < 2)
-                {
-                    return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
-                }
-                var metrics = new List<Metric>
-                {
-                    new() { Type = "motion", Name = "Test", Payload = new Dictionary<string, object>() }
-                };
-                return new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent(JsonSerializer.Serialize(metrics), Encoding.UTF8, "application/json")
-                };
+                Content = new StringContent(jsonResponse, Encoding.UTF8, "application/json")
             });
 
-        var httpClient = new HttpClient(handlerMock.Object)
-        {
-            BaseAddress = new Uri(_options.BaseUrl)
-        };
-        var client = new WeakApiClient(httpClient, _optionsMock.Object, _loggerMock.Object);
+        _httpClient.BaseAddress = new Uri("http://localhost:5000/");
 
+        var client = new WeakApiClient(_httpClient, _optionsMock.Object, _loggerMock.Object);
+
+        // Act
         var result = await client.FetchMetricsAsync();
 
-        callCount.Should().BeGreaterThan(1);
+        // Assert
         result.Should().NotBeNull();
+        result.Should().HaveCount(2);
+
+        var list = result.ToList();
+
+        list[0].Type.Should().Be("motion");
+        list[0].Name.Should().Be("Garage");
+
+        list[1].Type.Should().Be("energy");
+        list[1].Payload.Should().ContainKey("energy");
+
+        var energyValue = list[1].Payload["energy"] switch
+        {
+            JsonElement je => je.GetDouble(),
+            double d => d,
+            _ => 0.0 
+        };
+
+        energyValue.Should().BeApproximately(752.91, 0.0001);
     }
 
     [Fact]
-    public async Task FetchMetricsAsync_ShouldReturnEmpty_WhenApiReturnsEmptyArray()
+    public async Task FetchMetricsAsync_ShouldRetryAndSucceed_WhenApiInitiallyFails()
     {
-        var json = JsonSerializer.Serialize(new List<Metric>());
-        var httpResponse = new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
+        // Arrange
+        var invocationCount = 0;
 
-        var handlerMock = new Mock<HttpMessageHandler>();
-        handlerMock
+        _handlerMock
+            .Protected()
+            .SetupSequence<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)) // 1st call
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)) // 2nd call (1st retry)
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new[]
+                {
+                    new Metric { Type = "motion", Name = "Test", Payload = new Dictionary<string, object>() }
+                }), Encoding.UTF8, "application/json")
+            });
+
+        var client = new WeakApiClient(_httpClient, _optionsMock.Object, _loggerMock.Object);
+
+        // Act
+        var result = await client.FetchMetricsAsync();
+
+        // Assert
+        invocationCount = _handlerMock.Invocations.Count;
+        invocationCount.Should().Be(3); // Initial + 2 retries = 3 total calls
+
+        result.Should().HaveCount(1);
+        result.ElementAt(0).Name.Should().Be("Test");
+    }
+
+    [Fact]
+    public async Task FetchMetricsAsync_ShouldReturnEmptyList_WhenApiReturnsEmptyArray()
+    {
+        // Arrange
+        var emptyJson = JsonSerializer.Serialize(new List<Metric>());
+
+        _handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(httpResponse);
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(emptyJson, Encoding.UTF8, "application/json")
+            });
 
-        var httpClient = new HttpClient(handlerMock.Object)
-        {
-            BaseAddress = new Uri(_options.BaseUrl)
-        };
-        var client = new WeakApiClient(httpClient, _optionsMock.Object, _loggerMock.Object);
+        var client = new WeakApiClient(_httpClient, _optionsMock.Object, _loggerMock.Object);
 
+        // Act
         var result = await client.FetchMetricsAsync();
 
+        // Assert
         result.Should().NotBeNull();
         result.Should().BeEmpty();
     }
-}
 
+    [Fact]
+    public async Task FetchMetricsAsync_ShouldReturnEmptyList_AfterAllRetries_WhenApiAlwaysFails()
+    {
+        // Arrange
+        _handlerMock
+            .Protected()
+            .SetupSequence<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.InternalServerError))
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.InternalServerError))
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.InternalServerError)); // 3 calls total
+
+        _httpClient.BaseAddress = new Uri("http://localhost:5000/");
+
+        var client = new WeakApiClient(_httpClient, _optionsMock.Object, _loggerMock.Object);
+
+        // Act
+        var result = await client.FetchMetricsAsync();
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEmpty(); // Graceful degradation: empty list on failure
+
+        // Verify exactly 3 calls: initial + 2 retries (RetryCount = 2)
+        _handlerMock.Invocations.Count.Should().Be(3);
+    }
+}

@@ -1,5 +1,4 @@
 using CharonDataIngestor.Configuration;
-using CharonDataIngestor.Models;
 using CharonDataIngestor.Services.Interfaces;
 using Microsoft.Extensions.Options;
 

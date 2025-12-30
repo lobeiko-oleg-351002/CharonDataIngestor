@@ -4,7 +4,7 @@ using CharonDataIngestor.Services.Interfaces;
 
 namespace CharonDataIngestor.Services.Decorators;
 
-public class RabbitMqPublisherDecorator : IRabbitMqPublisher
+public class RabbitMqPublisherDecorator : IRabbitMqPublisher, IDisposable, IAsyncDisposable
 {
     private readonly IRabbitMqPublisher _inner;
     private readonly IExceptionHandlingService _exceptionHandling;
@@ -39,14 +39,17 @@ public class RabbitMqPublisherDecorator : IRabbitMqPublisher
     public void Dispose()
     {
         _inner?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_inner != null)
-        {
-            await _inner.DisposeAsync();
-        }
+        if (_inner is IAsyncDisposable asyncDisposable)
+            await asyncDisposable.DisposeAsync();
+        else
+            _inner?.Dispose();
+
+        GC.SuppressFinalize(this);
     }
 }
 

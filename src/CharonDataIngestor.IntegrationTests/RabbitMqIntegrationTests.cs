@@ -2,13 +2,10 @@ using CharonDataIngestor.Configuration;
 using CharonDataIngestor.Models;
 using CharonDataIngestor.Services;
 using CharonDataIngestor.Services.Interfaces;
+using CharonDbContext.Messages;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using RabbitMQ.Client;
 using Testcontainers.RabbitMq;
-using Xunit;
 
 namespace CharonDataIngestor.IntegrationTests;
 
@@ -22,8 +19,8 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
     {
         _rabbitMqContainer = new RabbitMqBuilder()
             .WithImage("rabbitmq:3-management")
-            .WithUsername("guest")
-            .WithPassword("guest")
+            .WithUsername("testuser")      // Custom username
+            .WithPassword("testpassword")  // Custom password
             .WithPortBinding(5672, true)
             .Build();
     }
@@ -33,46 +30,13 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
         await _rabbitMqContainer.StartAsync();
         
         var port = _rabbitMqContainer.GetMappedPublicPort(5672);
-        var hostName = "localhost";
-        var userName = "guest";
-        var password = "guest";
-        
-        var maxRetries = 30;
-        var retryDelay = TimeSpan.FromMilliseconds(500);
-        var connected = false;
-        
-        for (int i = 0; i < maxRetries; i++)
-        {
-            try
-            {
-                var factory = new ConnectionFactory
-                {
-                    HostName = hostName,
-                    Port = port,
-                    UserName = userName,
-                    Password = password,
-                    RequestedConnectionTimeout = TimeSpan.FromSeconds(2)
-                };
-                
-                using var connection = await factory.CreateConnectionAsync();
-                connected = connection.IsOpen;
-                await connection.CloseAsync();
-                break;
-            }
-            catch (Exception) when (i < maxRetries - 1)
-            {
-                await Task.Delay(retryDelay);
-            }
-        }
-        
-        if (!connected)
-        {
-            throw new InvalidOperationException($"Failed to connect to RabbitMQ after {maxRetries} attempts");
-        }
+        var hostname = "127.0.0.1"; // Connect via localhost from host machine
+        var userName = "testuser";
+        var password = "testpassword";
 
         var rabbitMqOptions = new RabbitMqOptions
         {
-            HostName = hostName,
+            HostName = hostname,
             Port = port,
             UserName = userName,
             Password = password,
@@ -82,7 +46,6 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
         };
 
         var services = new ServiceCollection();
-        
         services.AddLogging();
         services.Configure<RabbitMqOptions>(options =>
         {
@@ -123,9 +86,7 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
         await busControl.StartAsync(CancellationToken.None);
 
         var publishEndpoint = _serviceProvider.GetRequiredService<IPublishEndpoint>();
-        var logger = _serviceProvider.GetRequiredService<ILogger<RabbitMqPublisher>>();
-        
-        _publisher = new RabbitMqPublisher(publishEndpoint, logger);
+        _publisher = new RabbitMqPublisher(publishEndpoint);
     }
 
     public async Task DisposeAsync()
@@ -157,8 +118,6 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
         };
 
         await _publisher!.PublishAsync(metric);
-
-        await Task.CompletedTask;
     }
 
     [Fact]
@@ -171,8 +130,6 @@ public class RabbitMqIntegrationTests : IAsyncLifetime
         };
 
         await _publisher!.PublishBatchAsync(metrics);
-
-        await Task.CompletedTask;
     }
 }
 

@@ -1,0 +1,123 @@
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS builder
+
+# Version of the CharonDbContext package to build/push
+ARG Version=1.1.0
+
+WORKDIR /sln
+
+# Copy the entire project/solution
+COPY . .
+
+# Restore and build
+RUN dotnet restore
+RUN dotnet build /p:Version=$Version -c Release --no-restore
+
+# Pack CharonDbContext into /sln/artifacts
+RUN dotnet pack CharonDbContext/CharonDbContext.csproj \
+    /p:Version=$Version -c Release --no-restore --no-build -o /sln/artifacts
+
+# When running the container, push the package(s) to a NuGet feed
+# Example:
+#   docker run --rm charondbcontext-publisher \
+#     --source https://api.nuget.org/v3/index.json --api-key YOUR_KEY
+ENTRYPOINT ["dotnet", "nuget", "push", "/sln/artifacts/*.nupkg"]
+CMD ["--source", "https://api.nuget.org/v3/index.json"]
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS builder
+
+# Version of the CharonDbContext package to build/push
+ARG Version=1.1.0
+
+WORKDIR /sln
+
+# Copy the entire project/solution
+COPY . .
+
+# Restore and build
+RUN dotnet restore
+RUN dotnet build /p:Version=$Version -c Release --no-restore
+
+# Pack CharonDbContext into /sln/artifacts
+RUN dotnet pack CharonDbContext/CharonDbContext.csproj \
+    /p:Version=$Version -c Release --no-restore --no-build -o /sln/artifacts
+
+# When running the container, push the package(s) to a NuGet feed
+# Example:
+#   docker run --rm charondbcontext-publisher \
+#     --source https://api.nuget.org/v3/index.json --api-key YOUR_KEY
+ENTRYPOINT ["dotnet", "nuget", "push", "/sln/artifacts/*.nupkg"]
+CMD ["--source", "https://api.nuget.org/v3/index.json"]
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS builder
+
+# Version of the CharonDbContext package to build/push
+ARG Version=1.1.0
+
+WORKDIR /sln
+
+# Copy the entire project/solution
+COPY . .
+
+# Restore and build
+RUN dotnet restore
+RUN dotnet build /p:Version=$Version -c Release --no-restore
+
+# Pack CharonDbContext into /sln/artifacts
+RUN dotnet pack CharonDbContext/CharonDbContext.csproj \
+    /p:Version=$Version -c Release --no-restore --no-build -o /sln/artifacts
+
+# When running the container, push the package(s) to a NuGet feed
+# Example:
+#   docker run --rm charondbcontext-publisher \
+#     --source https://api.nuget.org/v3/index.json --api-key YOUR_KEY
+ENTRYPOINT ["dotnet", "nuget", "push", "/sln/artifacts/*.nupkg"]
+CMD ["--source", "https://api.nuget.org/v3/index.json"]
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS builder
+
+# Version of the CharonDbContext package to build/push
+ARG Version=1.1.0
+
+WORKDIR /sln
+
+# Copy the entire project/solution
+COPY . .
+
+# Restore and build
+RUN dotnet restore
+RUN dotnet build /p:Version=$Version -c Release --no-restore
+
+# Pack CharonDbContext into /sln/artifacts
+RUN dotnet pack CharonDbContext/CharonDbContext.csproj \
+    /p:Version=$Version -c Release --no-restore --no-build -o /sln/artifacts
+
+# When running the container, push the package(s) to a NuGet feed
+# Example:
+#   docker run --rm charondbcontext-publisher \
+#     --source https://api.nuget.org/v3/index.json --api-key YOUR_KEY
+ENTRYPOINT ["dotnet", "nuget", "push", "/sln/artifacts/*.nupkg"]
+CMD ["--source", "https://api.nuget.org/v3/index.json"]
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS builder
+
+# Version of the CharonDbContext package to build
+ARG Version=1.1.0
+
+WORKDIR /sln
+
+# Copy the entire solution / project into the image
+COPY . .
+
+# Restore and build
+RUN dotnet restore
+RUN dotnet build /p:Version=$Version -c Release --no-restore
+
+# Pack CharonDbContext into /sln/artifacts
+RUN dotnet pack CharonDbContext/CharonDbContext.csproj \
+    /p:Version=$Version -c Release --no-restore --no-build -o /sln/artifacts
+
+# When the container is run, push the package(s) to a NuGet feed
+# Example:
+#   docker run --rm charondbcontext-publisher \
+#     --source https://api.nuget.org/v3/index.json --api-key YOUR_KEY
+ENTRYPOINT ["dotnet", "nuget", "push", "/sln/artifacts/*.nupkg"]
+CMD ["--source", "https://api.nuget.org/v3/index.json"]
+
+
