@@ -8,14 +8,11 @@ namespace CharonDataIngestor.Services;
 public class RabbitMqPublisher : IRabbitMqPublisher
 {
     private readonly IPublishEndpoint _publishEndpoint;
-    private readonly ILogger<RabbitMqPublisher> _logger;
 
     public RabbitMqPublisher(
-        IPublishEndpoint publishEndpoint,
-        ILogger<RabbitMqPublisher> logger)
+        IPublishEndpoint publishEndpoint)
     {
         _publishEndpoint = publishEndpoint;
-        _logger = logger;
     }
 
     public async Task PublishAsync(Metric metric, CancellationToken cancellationToken = default)
@@ -27,7 +24,6 @@ public class RabbitMqPublisher : IRabbitMqPublisher
             Payload = metric.Payload
         };
 
-        // Publish to the metrics exchange explicitly
         await _publishEndpoint.Publish(message, ctx =>
         {
             ctx.SetRoutingKey("metrics");
