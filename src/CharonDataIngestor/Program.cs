@@ -47,6 +47,8 @@ try
     builder.Services.Configure<IngestionOptions>(
         builder.Configuration.GetSection(IngestionOptions.SectionName));
 
+    builder.Services.AddMemoryCache();
+    
     builder.Services.AddHttpClient<WeakApiClient>((serviceProvider, client) =>
     {
         var options = serviceProvider.GetRequiredService<IOptions<WeakApiOptions>>().Value;
@@ -55,11 +57,19 @@ try
         client.DefaultRequestHeaders.Add("X-Api-Key", options.ApiKey);
     });
     
+    builder.Services.AddScoped<IIdempotencyService, IdempotencyService>();
+    
     builder.Services.AddScoped<IWeakApiClient>(serviceProvider =>
     {
         var inner = serviceProvider.GetRequiredService<WeakApiClient>();
         var exceptionHandling = serviceProvider.GetRequiredService<IExceptionHandlingService>();
-        return new WeakApiClientDecorator(inner, exceptionHandling);
+        var idempotencyService = serviceProvider.GetRequiredService<IIdempotencyService>();
+        var options = serviceProvider.GetRequiredService<IOptions<WeakApiOptions>>();
+        var logger = serviceProvider.GetRequiredService<ILogger<IdempotencyWeakApiClientDecorator>>();
+        
+        // Chain decorators: Idempotency -> Exception Handling -> WeakApiClient
+        var withExceptionHandling = new WeakApiClientDecorator(inner, exceptionHandling);
+        return new IdempotencyWeakApiClientDecorator(withExceptionHandling, idempotencyService, options, logger);
     });
 
     builder.Services.AddValidatorsFromAssemblyContaining<MetricValidator>();
