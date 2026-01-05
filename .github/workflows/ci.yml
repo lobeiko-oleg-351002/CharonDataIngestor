@@ -2,15 +2,18 @@ name: CharonDataIngestor CI
 
 on:
   push:
-    branches: [ main, develop ]
     paths:
       - 'src/**'
       - '.github/workflows/ci.yml'
   pull_request:
-    branches: [ main, develop ]
     paths:
       - 'src/**'
       - '.github/workflows/ci.yml'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
 
 env:
   DOTNET_VERSION: '9.0.x'
@@ -70,11 +73,11 @@ jobs:
       uses: EnricoMi/publish-unit-test-result-action@v2
       if: always()
       with:
-        test-results-files: |
+        files: |
           ${{ env.PROJECT_PATH }}/**/test-results.trx
           ${{ env.PROJECT_PATH }}/**/integration-test-results.trx
-        check-name: 'Test Results'
-        fail-on: 'test failures'
+        check_name: 'Test Results'
+        fail_on: 'test failures'
         
     - name: Publish build artifacts
       uses: actions/upload-artifact@v4
@@ -90,7 +93,7 @@ jobs:
     name: Docker Build
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'push'
     
     steps:
     - name: Checkout code
@@ -108,4 +111,3 @@ jobs:
         tags: charondataingestor:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
-
