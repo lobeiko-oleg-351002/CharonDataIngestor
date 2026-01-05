@@ -10,6 +10,11 @@ on:
       - 'src/**'
       - '.github/workflows/ci.yml'
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 env:
   DOTNET_VERSION: '9.0.x'
   PROJECT_PATH: 'src'
@@ -68,7 +73,7 @@ jobs:
       uses: EnricoMi/publish-unit-test-result-action@v2
       if: always()
       with:
-        trx_files: |
+        files: |
           ${{ env.PROJECT_PATH }}/**/test-results.trx
           ${{ env.PROJECT_PATH }}/**/integration-test-results.trx
         check_name: 'Test Results'
