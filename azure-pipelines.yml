@@ -1,0 +1,118 @@
+trigger:
+  branches:
+    include:
+    - develop
+    - main
+    exclude:
+    - feature/*
+  paths:
+    include:
+    - CharonDataIngestor/**
+    - CharonDataIngestor/azure-pipelines.yml
+
+pool:
+  vmImage: 'ubuntu-latest'
+  
+variables:
+  solution: 'CharonDataIngestor/src/CharonDataIngestor.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+  dotnetVersion: '9.0.x'
+
+jobs:
+- job: Build
+  displayName: 'Build and Test'
+  steps:
+  - task: UseDotNet@2
+    displayName: 'Use .NET SDK'
+    inputs:
+      packageType: 'sdk'
+      version: '$(dotnetVersion)'
+      installationPath: $(Agent.ToolsDirectory)/dotnet
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Restore dependencies'
+    inputs:
+      command: 'restore'
+      projects: '$(solution)'
+      feedsToUse: 'select'
+      includeNuGetOrg: true
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Build solution'
+    inputs:
+      command: 'build'
+      projects: '$(solution)'
+      arguments: '--configuration $(buildConfiguration) --no-restore'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Run unit tests'
+    inputs:
+      command: 'test'
+      projects: 'CharonDataIngestor/src/CharonDataIngestor.Tests/CharonDataIngestor.Tests.csproj'
+      arguments: '--configuration $(buildConfiguration) --no-build --logger "trx;LogFileName=test-results.trx"'
+      publishTestResults: true
+      testResultsFormat: 'VSTest'
+      testResultsFiles: '**/test-results.trx'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Run integration tests'
+    inputs:
+      command: 'test'
+      projects: 'CharonDataIngestor/src/CharonDataIngestor.IntegrationTests/CharonDataIngestor.IntegrationTests.csproj'
+      arguments: '--configuration $(buildConfiguration) --no-build --logger "trx;LogFileName=integration-test-results.trx"'
+      env:
+        RABBITMQ_HOSTNAME: 'localhost'
+        RABBITMQ_PORT: '5672'
+        RABBITMQ_USERNAME: 'guest'
+        RABBITMQ_PASSWORD: 'guest'
+      publishTestResults: true
+      testResultsFormat: 'VSTest'
+      testResultsFiles: '**/integration-test-results.trx'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Publish Artifact'
+    inputs:
+      command: 'publish'
+      projects: 'CharonDataIngestor/src/CharonDataIngestor/CharonDataIngestor.csproj'
+      arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/CharonDataIngestor'
+      zipAfterPublish: true
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Build Artifact'
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: 'charondataingestor-drop'
+      publishLocation: 'Container'
+
+- job: DockerBuild
+  displayName: 'Build Docker Image'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  steps:
+  - task: Docker@2
+    displayName: 'Build Docker image'
+    inputs:
+      containerRegistry: 'DockerHub'
+      repository: 'charondataingestor'
+      command: 'build'
+      Dockerfile: 'CharonDataIngestor/src/Dockerfile'
+      buildContext: 'CharonDataIngestor/src'
+      tags: |
+        latest
+        $(Build.BuildId)
+
+- job: Deploy
+  displayName: 'Deploy to Azure App Service'
+  dependsOn: DockerBuild
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  steps:
+  - task: AzureRmWebAppDeployment@4
+    displayName: 'Azure App Service Deploy'
+    inputs:
+      ConnectionType: 'AzureRM'
+      azureSubscription: 'azure-Dev'
+      appType: 'webAppLinux'
+      WebAppName: 'charondataingestor'
+      packageForLinux: '$(Build.ArtifactStagingDirectory)/CharonDataIngestor/*.zip'
+
